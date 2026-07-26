@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .page-shell {
+    @apply min-h-screen bg-soft-bg;
+  }
+
+  .voice-btn {
+    @apply w-full rounded-voice bg-[#f7f7f7] text-center text-[32rpx] text-ink-700
+      border border-soft-line select-none;
+    height: 96rpx;
+    line-height: 96rpx;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .voice-btn-active {
+    @apply bg-[#c6c6c6] text-ink-900 border-[#b5b5b5];
+  }
+}
