@@ -26,10 +26,11 @@
 
     <view class="card">
       <text class="section">语音识别</text>
-      <text class="line">1. 登录微信公众平台 → 设置 → 第三方设置 → 插件管理</text>
-      <text class="line">2. 添加插件「同声传译」（WechatSI）</text>
-      <text class="line">3. 重新编译小程序后，首页长按即可语音记账</text>
-      <text class="line">4. 首次使用需允许麦克风权限</text>
+      <text class="line">当前默认关闭插件声明，避免未授权导致白屏。</text>
+      <text class="line">启用方法见文档：uni-app/docs/voice-plugin.md</text>
+      <text class="line">1. 服务市场添加「同声传译」插件</text>
+      <text class="line">2. 再把 plugins 配置写回 manifest.json</text>
+      <text class="line">3. 重新编译后即可长按语音记账</text>
     </view>
 
     <view class="card">
