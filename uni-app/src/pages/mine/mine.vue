@@ -1,14 +1,44 @@
 <template>
-  <view class="page-shell px-8 pt-10">
-    <text class="block text-[40rpx] font-semibold text-ink-900">我的</text>
-    <text class="mt-3 block text-[28rpx] text-soft-mute">
-      这里是我的页。若能看到这段文字，说明底部「我的」切换成功。
-    </text>
-    <view class="mt-8 rounded-voice bg-white border border-soft-line px-5 py-6">
-      <text class="block text-[30rpx] text-ink-700">设置与账户信息稍后接入（占位）</text>
+  <view class="page">
+    <text class="title">我的</text>
+    <text class="desc">这里是我的页。若能看到这段文字，说明底部「我的」切换成功。</text>
+    <view class="card">
+      <text class="card-text">设置与账户信息稍后接入（占位）</text>
     </view>
   </view>
 </template>
 
 <script setup>
 </script>
+
+<style lang="scss" scoped>
+.page {
+  min-height: 100vh;
+  padding: 48rpx 40rpx;
+  background: #f7f8fa;
+}
+.title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.desc {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  color: #b2b2b2;
+  line-height: 1.5;
+}
+.card {
+  margin-top: 40rpx;
+  padding: 32rpx 28rpx;
+  background: #ffffff;
+  border: 1rpx solid #e5e5e5;
+  border-radius: 12rpx;
+}
+.card-text {
+  font-size: 30rpx;
+  color: #353535;
+}
+</style>

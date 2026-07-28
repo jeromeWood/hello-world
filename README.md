@@ -4,27 +4,12 @@
 
 ## 当前进度
 
-已完成首页静态结构与基础样式：
+已完成首页静态结构与基础样式（**不需要后端**即可预览）：
 
 - 顶部日期与欢迎语
 - 仿微信语音的长按录音按钮（按下变色，文案切换为「松开发送」）
 - 文本输入框与发送按钮样式
 - 底部原生 tabBar：首页 / 账单 / 统计 / 我的
-
-## 目录
-
-```
-uni-app/
-  src/
-    pages/index/index.vue   # 首页
-    pages/bills/bills.vue   # 账单占位
-    pages/stats/stats.vue   # 统计占位
-    pages/mine/mine.vue     # 我的占位
-    styles/tailwind.css
-    pages.json
-  tailwind.config.js
-  vite.config.js
-```
 
 ## 本地运行
 
@@ -34,7 +19,13 @@ npm install
 npm run dev:mp-weixin
 ```
 
-用微信开发者工具打开 `uni-app/dist/dev/mp-weixin` 即可预览。
+用微信开发者工具导入目录（必须是编译产物）：
+
+```text
+uni-app/dist/dev/mp-weixin
+```
+
+不要导入 `uni-app` 或 `uni-app/src`。
 
 ## 下一步（规划）
 

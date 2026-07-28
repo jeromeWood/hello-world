@@ -1,77 +1,46 @@
 <template>
-  <view class="page-shell flex flex-col">
+  <view class="page">
     <!-- 顶部：日期 + 欢迎语 -->
-    <view class="px-8 pt-6 pb-4">
-      <text class="block text-[26rpx] text-soft-mute tracking-wide">
-        {{ dateLabel }}
-      </text>
-      <text class="mt-2 block text-[44rpx] font-semibold text-ink-900 leading-tight">
-        {{ greeting }}，开始记账吧
-      </text>
-      <text class="mt-3 block text-[28rpx] text-ink-500 leading-relaxed">
-        长按说话或输入文字，AI 帮你自动识别金额与分类
-      </text>
+    <view class="header">
+      <text class="date">{{ dateLabel }}</text>
+      <text class="title">{{ greeting }}，开始记账吧</text>
+      <text class="subtitle">长按说话或输入文字，AI 帮你自动识别金额与分类</text>
     </view>
 
     <!-- 中间主操作区 -->
-    <view class="flex-1 flex flex-col justify-center px-8 pb-8">
-      <!-- 仿微信语音：长按录音按钮 -->
+    <view class="main">
       <view
         class="voice-btn"
-        :class="{ 'voice-btn-active': isRecording }"
+        :class="{ active: isRecording }"
         @touchstart.prevent="onVoiceStart"
         @touchend.prevent="onVoiceEnd"
         @touchcancel.prevent="onVoiceEnd"
       >
-        {{ isRecording ? '松开发送' : '按住 说话' }}
+        <text class="voice-text">{{ isRecording ? '松开发送' : '按住 说话' }}</text>
       </view>
 
-      <!-- 录音态提示（静态展示用） -->
-      <view
-        v-if="isRecording"
-        class="mt-4 flex items-center justify-center"
-      >
-        <view class="flex items-end gap-1 h-8">
-          <view
-            v-for="n in 5"
-            :key="n"
-            class="w-1 rounded-full bg-brand-500 animate-pulse"
-            :style="{ height: `${12 + n * 4}rpx`, animationDelay: `${n * 80}ms` }"
-          />
-        </view>
-        <text class="ml-3 text-[24rpx] text-brand-600">正在聆听…</text>
+      <view v-if="isRecording" class="listening">
+        <text class="listening-text">正在聆听…</text>
       </view>
 
-      <!-- 文本输入框 -->
-      <view class="mt-8">
-        <view
-          class="rounded-voice bg-white border border-soft-line px-4 py-3"
-        >
-          <textarea
-            v-model="inputText"
-            class="w-full text-[30rpx] text-ink-900 leading-relaxed"
-            style="min-height: 160rpx; width: 100%"
-            placeholder="也可以直接输入，例如：午饭花了 32 元"
-            placeholder-class="text-soft-mute"
-            :maxlength="200"
-            :auto-height="true"
-            :show-confirm-bar="false"
-          />
-        </view>
+      <view class="input-wrap">
+        <textarea
+          v-model="inputText"
+          class="input"
+          placeholder="也可以直接输入，例如：午饭花了 32 元"
+          placeholder-class="placeholder"
+          :maxlength="200"
+          :auto-height="true"
+          :show-confirm-bar="false"
+        />
+      </view>
 
-        <view class="mt-4 flex justify-end">
-          <view
-            class="rounded-voice px-8 py-3 text-[28rpx] text-white"
-            :class="inputText.trim() ? 'bg-brand-500' : 'bg-soft-mute'"
-          >
-            发送
-          </view>
+      <view class="send-row">
+        <view class="send-btn" :class="{ ready: !!inputText.trim() }">
+          <text class="send-text">发送</text>
         </view>
       </view>
     </view>
-
-    <!-- 底部占位，避免内容被原生 tabBar 遮挡 -->
-    <view class="h-4" />
   </view>
 </template>
 
@@ -80,9 +49,7 @@ import { computed, ref } from 'vue'
 
 const isRecording = ref(false)
 const inputText = ref('')
-
 const now = new Date()
-
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 
 const dateLabel = computed(() => {
@@ -107,3 +74,115 @@ function onVoiceEnd() {
   isRecording.value = false
 }
 </script>
+
+<style lang="scss" scoped>
+.page {
+  min-height: 100vh;
+  padding: 24rpx 40rpx 40rpx;
+  background: #f7f8fa;
+}
+
+.header {
+  padding-top: 12rpx;
+  padding-bottom: 24rpx;
+}
+
+.date {
+  display: block;
+  font-size: 26rpx;
+  color: #b2b2b2;
+}
+
+.title {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 44rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.3;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  color: #576b95;
+  line-height: 1.5;
+}
+
+.main {
+  margin-top: 80rpx;
+}
+
+.voice-btn {
+  height: 96rpx;
+  border-radius: 12rpx;
+  background: #f7f7f7;
+  border: 1rpx solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.voice-btn.active {
+  background: #c6c6c6;
+  border-color: #b5b5b5;
+}
+
+.voice-text {
+  font-size: 32rpx;
+  color: #353535;
+}
+
+.listening {
+  margin-top: 20rpx;
+  display: flex;
+  justify-content: center;
+}
+
+.listening-text {
+  font-size: 24rpx;
+  color: #179b16;
+}
+
+.input-wrap {
+  margin-top: 48rpx;
+  background: #ffffff;
+  border: 1rpx solid #e5e5e5;
+  border-radius: 12rpx;
+  padding: 24rpx;
+}
+
+.input {
+  width: 100%;
+  min-height: 160rpx;
+  font-size: 30rpx;
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+.placeholder {
+  color: #b2b2b2;
+}
+
+.send-row {
+  margin-top: 24rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.send-btn {
+  padding: 16rpx 48rpx;
+  border-radius: 12rpx;
+  background: #b2b2b2;
+}
+
+.send-btn.ready {
+  background: #1aad19;
+}
+
+.send-text {
+  font-size: 28rpx;
+  color: #ffffff;
+}
+</style>
