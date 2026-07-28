@@ -1,7 +1,12 @@
 <template>
   <view class="page-shell px-8 pt-10">
     <text class="block text-[40rpx] font-semibold text-ink-900">我的</text>
-    <text class="mt-3 block text-[28rpx] text-soft-mute">个人中心页占位，后续接入设置与账户信息</text>
+    <text class="mt-3 block text-[28rpx] text-soft-mute">
+      这里是我的页。若能看到这段文字，说明底部「我的」切换成功。
+    </text>
+    <view class="mt-8 rounded-voice bg-white border border-soft-line px-5 py-6">
+      <text class="block text-[30rpx] text-ink-700">设置与账户信息稍后接入（占位）</text>
+    </view>
   </view>
 </template>
 

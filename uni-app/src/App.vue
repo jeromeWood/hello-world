@@ -1,9 +1,10 @@
-<script setup>
+<script>
+export default {
+  onLaunch() {},
+  onShow() {},
+  onHide() {}
+}
 </script>
-
-<template>
-  <view />
-</template>
 
 <style lang="scss">
 page {
