@@ -97,12 +97,74 @@ function localAdvice(payload) {
   return { ok: true, engine: 'local-rules', tips }
 }
 
+/** 清洗模型输出：去掉思考标签、代码块，再提取 JSON */
+function extractJson(content) {
+  let text = String(content || '')
+
+  // 去掉各类思考/推理标签（DeepSeek-R1、Qwen 等常见）
+  text = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<\/?think>/gi, '')
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+    .replace(/<analysis>[\s\S]*?<\/analysis>/gi, '')
+    .trim()
+
+  // ```json ... ``` 或 ``` ... ```
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fence) text = fence[1].trim()
+
+  // 截取第一个 { ... } 或 [ ... ]
+  const objStart = text.indexOf('{')
+  const arrStart = text.indexOf('[')
+  let start = -1
+  if (objStart >= 0 && (arrStart < 0 || objStart < arrStart)) start = objStart
+  else if (arrStart >= 0) start = arrStart
+
+  if (start >= 0) {
+    const opener = text[start]
+    const closer = opener === '{' ? '}' : ']'
+    let depth = 0
+    let end = -1
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === opener) depth++
+      else if (text[i] === closer) {
+        depth--
+        if (depth === 0) {
+          end = i
+          break
+        }
+      }
+    }
+    if (end >= 0) text = text.slice(start, end + 1)
+  }
+
+  return JSON.parse(text)
+}
+
 async function chatJson(system, user) {
   const apiKey = process.env.AI_API_KEY
   if (!apiKey) return null
 
   const base = (process.env.AI_API_BASE || 'https://api.openai.com/v1').replace(/\/$/, '')
   const model = process.env.AI_MODEL || 'gpt-4o-mini'
+  // 部分兼容接口不支持 response_format；默认关闭，可通过 AI_JSON_MODE=1 开启
+  const jsonMode = String(process.env.AI_JSON_MODE || '').trim() === '1'
+
+  const body = {
+    model,
+    temperature: 0.1,
+    messages: [
+      {
+        role: 'system',
+        content:
+          `${system}\n\n重要：不要输出思考过程、分析或 <think> 标签；只输出一个合法 JSON 对象，不要 Markdown。`
+      },
+      { role: 'user', content: user }
+    ]
+  }
+  if (jsonMode) {
+    body.response_format = { type: 'json_object' }
+  }
 
   const resp = await fetch(`${base}/chat/completions`, {
     method: 'POST',
@@ -110,15 +172,7 @@ async function chatJson(system, user) {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ]
-    })
+    body: JSON.stringify(body)
   })
 
   if (!resp.ok) {
@@ -127,8 +181,16 @@ async function chatJson(system, user) {
   }
 
   const data = await resp.json()
-  const content = data.choices?.[0]?.message?.content || '{}'
-  return JSON.parse(content)
+  const message = data.choices?.[0]?.message || {}
+  // 有些推理模型把正文放在 content，思考在 reasoning_content
+  const content = message.content || message.reasoning_content || '{}'
+
+  try {
+    return extractJson(content)
+  } catch (e) {
+    const preview = String(content).slice(0, 180).replace(/\s+/g, ' ')
+    throw new Error(`AI JSON 解析失败: ${e.message}; preview=${preview}`)
+  }
 }
 
 export async function parseExpenseText(text) {
