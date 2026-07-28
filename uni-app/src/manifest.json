@@ -6,7 +6,7 @@
   "versionCode": "100",
   "transformPx": false,
   "mp-weixin": {
-    "appid": "",
+    "appid": "wx8c08674e2ea9feea",
     "lazyCodeLoading": "requiredComponents",
     "setting": {
       "urlCheck": false,
@@ -14,14 +14,9 @@
       "minified": true
     },
     "usingComponents": true,
-    "permission": {
-      "scope.record": {
-        "desc": "用于语音记账识别"
-      }
-    },
     "plugins": {
       "WechatSI": {
-        "version": "0.3.5",
+        "version": "0.3.9",
         "provider": "wx069ba97219f66d99"
       }
     }

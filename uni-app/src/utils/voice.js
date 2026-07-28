@@ -33,39 +33,49 @@ export function isVoiceAvailable() {
 /**
  * 申请录音权限。
  * 注意：开发者工具模拟器经常不弹系统授权框，真机才会出现。
+ * 麦克风用途需在公众平台「用户隐私保护指引」中声明，不能写在 app.json permission 里。
  */
 export function ensureRecordPermission() {
   return new Promise((resolve) => {
-    uni.getSetting({
-      success: (setting) => {
-        const authed = !!(setting.authSetting && setting.authSetting['scope.record'])
-        if (authed) {
-          resolve(true)
-          return
-        }
-
-        // 尚未授权：发起授权（模拟器可能静默成功/失败且无弹窗）
-        uni.authorize({
-          scope: 'scope.record',
-          success: () => resolve(true),
-          fail: () => {
-            // 模拟器或用户拒绝时，给出可操作提示
-            uni.showModal({
-              title: '需要麦克风权限',
-              content:
-                '语音记账需要麦克风。若在模拟器中未出现授权框，请用「真机调试/预览」；也可到右上角详情查看权限。',
-              confirmText: '去设置',
-              cancelText: '知道了',
-              success: (res) => {
-                if (res.confirm) uni.openSetting({})
-              },
-              complete: () => resolve(false)
-            })
+    const doAuthorize = () => {
+      uni.getSetting({
+        success: (setting) => {
+          const authed = !!(setting.authSetting && setting.authSetting['scope.record'])
+          if (authed) {
+            resolve(true)
+            return
           }
-        })
-      },
-      fail: () => resolve(false)
-    })
+          uni.authorize({
+            scope: 'scope.record',
+            success: () => resolve(true),
+            fail: () => {
+              uni.showModal({
+                title: '需要麦克风权限',
+                content:
+                  '请允许麦克风用于语音记账。若提示未在隐私协议声明，请到公众平台完善「用户隐私保护指引」。模拟器可能不弹窗，请用真机。',
+                confirmText: '去设置',
+                cancelText: '知道了',
+                success: (res) => {
+                  if (res.confirm) uni.openSetting({})
+                },
+                complete: () => resolve(false)
+              })
+            }
+          })
+        },
+        fail: () => resolve(false)
+      })
+    }
+
+    // 新版隐私合规：先走隐私授权（不支持则直接申请录音）
+    if (typeof wx !== 'undefined' && typeof wx.requirePrivacyAuthorize === 'function') {
+      wx.requirePrivacyAuthorize({
+        success: doAuthorize,
+        fail: doAuthorize
+      })
+    } else {
+      doAuthorize()
+    }
   })
 }
 
