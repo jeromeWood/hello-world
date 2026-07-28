@@ -26,11 +26,10 @@
 
     <view class="card">
       <text class="section">语音识别</text>
-      <text class="line">当前默认关闭插件声明，避免未授权导致白屏。</text>
-      <text class="line">启用方法见文档：uni-app/docs/voice-plugin.md</text>
-      <text class="line">1. 服务市场添加「同声传译」插件</text>
-      <text class="line">2. 再把 plugins 配置写回 manifest.json</text>
-      <text class="line">3. 重新编译后即可长按语音记账</text>
+      <text class="line">已启用微信同声传译插件（WechatSI）。</text>
+      <text class="line">首页长按「按住 说话」即可语音记账。</text>
+      <text class="line">首次使用请允许麦克风权限；模拟器可能不弹窗，建议真机预览。</text>
+      <text class="line">若白屏，请确认公众平台插件版本与 manifest 中 version 一致。</text>
     </view>
 
     <view class="card">
