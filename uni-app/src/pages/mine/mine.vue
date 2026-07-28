@@ -25,10 +25,19 @@
     </view>
 
     <view class="card">
+      <text class="section">语音识别</text>
+      <text class="line">1. 登录微信公众平台 → 设置 → 第三方设置 → 插件管理</text>
+      <text class="line">2. 添加插件「同声传译」（WechatSI）</text>
+      <text class="line">3. 重新编译小程序后，首页长按即可语音记账</text>
+      <text class="line">4. 首次使用需允许麦克风权限</text>
+    </view>
+
+    <view class="card">
       <text class="section">说明</text>
       <text class="line">1. 本机先启动 server：`cd server && npm install && npm run dev`</text>
       <text class="line">2. 微信开发者工具需关闭域名校验（详情 → 本地设置）</text>
       <text class="line">3. 未配置 AI_API_KEY 时，后端使用本地规则引擎</text>
+      <text class="line">4. 支持一次输入多笔：咖啡10块，停车4块，吃饭20</text>
     </view>
   </view>
 </template>

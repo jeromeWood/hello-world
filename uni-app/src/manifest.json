@@ -13,7 +13,19 @@
       "es6": true,
       "minified": true
     },
-    "usingComponents": true
+    "usingComponents": true,
+    "permission": {
+      "scope.record": {
+        "desc": "用于语音记账识别"
+      }
+    },
+    "requiredPrivateInfos": [],
+    "plugins": {
+      "WechatSI": {
+        "version": "0.3.5",
+        "provider": "wx069ba97219f66d99"
+      }
+    }
   },
   "vueVersion": "3"
 }

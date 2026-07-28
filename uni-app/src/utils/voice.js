@@ -1,44 +1,84 @@
 /**
- * 语音识别封装：
- * 1) 优先尝试微信同声传译插件 WechatSI
- * 2) 不可用时回退提示，引导使用文字输入
+ * 语音识别：微信同声传译插件 WechatSI
+ * 需在微信公众平台添加插件，并在 manifest 声明。
  */
 
 let recordManager = null
 let usingPlugin = false
+let initTried = false
 
 function tryInitPlugin() {
+  if (initTried) return usingPlugin
+  initTried = true
   try {
     // #ifdef MP-WEIXIN
     const plugin = requirePlugin('WechatSI')
-    if (plugin && plugin.getRecordRecognitionManager) {
+    if (plugin && typeof plugin.getRecordRecognitionManager === 'function') {
       recordManager = plugin.getRecordRecognitionManager()
       usingPlugin = true
       return true
     }
     // #endif
   } catch (e) {
-    // ignore
+    console.warn('WechatSI init failed', e)
+    usingPlugin = false
   }
   return false
 }
 
 export function isVoiceAvailable() {
-  if (recordManager) return usingPlugin
   return tryInitPlugin()
 }
 
-export function startVoiceRecognize({ onStart, onError } = {}) {
+export function ensureRecordPermission() {
+  return new Promise((resolve) => {
+    uni.getSetting({
+      success: (setting) => {
+        if (setting.authSetting && setting.authSetting['scope.record']) {
+          resolve(true)
+          return
+        }
+        uni.authorize({
+          scope: 'scope.record',
+          success: () => resolve(true),
+          fail: () => {
+            uni.showModal({
+              title: '需要麦克风权限',
+              content: '语音记账需要使用麦克风，请在设置中开启',
+              confirmText: '去设置',
+              success: (res) => {
+                if (res.confirm) uni.openSetting({})
+              }
+            })
+            resolve(false)
+          }
+        })
+      },
+      fail: () => resolve(false)
+    })
+  })
+}
+
+export async function startVoiceRecognize({ onStart, onError } = {}) {
   if (!isVoiceAvailable()) {
     onError && onError(new Error('VOICE_UNAVAILABLE'))
     return false
   }
 
+  const allowed = await ensureRecordPermission()
+  if (!allowed) {
+    onError && onError(new Error('RECORD_DENIED'))
+    return false
+  }
+
   recordManager.onStart = () => onStart && onStart()
-  recordManager.onError = (err) => onError && onError(err)
+  recordManager.onError = (err) => {
+    console.warn('voice error', err)
+    onError && onError(err)
+  }
 
   try {
-    recordManager.start({ duration: 30000, lang: 'zh_CN' })
+    recordManager.start({ duration: 60000, lang: 'zh_CN' })
     return true
   } catch (e) {
     onError && onError(e)
@@ -53,8 +93,8 @@ export function stopVoiceRecognize({ onResult, onError } = {}) {
   }
 
   recordManager.onStop = (res) => {
-    const text = (res && res.result) || ''
-    onResult && onResult(text.trim())
+    const text = ((res && res.result) || '').trim()
+    onResult && onResult(text)
   }
   recordManager.onError = (err) => onError && onError(err)
 

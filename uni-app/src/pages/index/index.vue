@@ -3,7 +3,7 @@
     <view class="header">
       <text class="date">{{ dateLabel }}</text>
       <text class="title">{{ greeting }}，开始记账吧</text>
-      <text class="subtitle">长按说话或输入文字，自动识别金额与分类</text>
+      <text class="subtitle">支持一次输入多笔，例如：咖啡10块，停车4块，吃饭20</text>
     </view>
 
     <view class="main">
@@ -28,9 +28,9 @@
         <textarea
           v-model="inputText"
           class="input"
-          placeholder="例如：午饭花了 32 元 / 收到工资 12000"
+          placeholder="例如：我买咖啡10块，停车4块&#10;吃饭20"
           placeholder-class="placeholder"
-          :maxlength="200"
+          :maxlength="500"
           :auto-height="true"
           :show-confirm-bar="false"
         />
@@ -51,34 +51,32 @@
       </view>
     </view>
 
-    <!-- 解析确认弹层 -->
+    <!-- 多条确认弹层 -->
     <view v-if="showConfirm" class="mask" @click="closeConfirm">
       <view class="sheet" @click.stop>
-        <text class="sheet-title">确认记账</text>
-        <view class="row">
-          <text class="label">类型</text>
-          <text class="value">{{ pending.type === 'income' ? '收入' : '支出' }}</text>
-        </view>
-        <view class="row">
-          <text class="label">金额</text>
-          <text class="value amount" :class="pending.type">
-            {{ pending.type === 'income' ? '+' : '-' }}¥{{ pending.amount }}
-          </text>
-        </view>
-        <view class="row">
-          <text class="label">分类</text>
-          <text class="value">{{ pending.categoryName }}</text>
-        </view>
-        <view class="row">
-          <text class="label">备注</text>
-          <text class="value">{{ pending.note }}</text>
-        </view>
+        <text class="sheet-title">确认记账（{{ pendingList.length }} 笔）</text>
+
+        <scroll-view scroll-y class="sheet-list">
+          <view v-for="(item, idx) in pendingList" :key="idx" class="item">
+            <view class="item-main">
+              <text class="item-cat">{{ item.categoryName }}</text>
+              <text class="item-note">{{ item.note }}</text>
+            </view>
+            <view class="item-right">
+              <text class="item-amount" :class="item.type">
+                {{ item.type === 'income' ? '+' : '-' }}¥{{ item.amount }}
+              </text>
+              <text class="item-del" @click="removePending(idx)">删除</text>
+            </view>
+          </view>
+        </scroll-view>
+
         <view class="sheet-actions">
           <view class="btn ghost" @click="closeConfirm">
             <text>取消</text>
           </view>
-          <view class="btn primary" @click="confirmSave">
-            <text>保存</text>
+          <view class="btn primary" :class="{ disabled: !pendingList.length }" @click="confirmSave">
+            <text>全部保存</text>
           </view>
         </view>
       </view>
@@ -89,7 +87,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { aiParse } from '../../utils/api.js'
-import { parseBookkeepingText } from '../../utils/parser.js'
+import { normalizeParseResult, parseBookkeepingText } from '../../utils/parser.js'
 import { addBill } from '../../utils/storage.js'
 import { isVoiceAvailable, startVoiceRecognize, stopVoiceRecognize } from '../../utils/voice.js'
 
@@ -98,15 +96,8 @@ const inputText = ref('')
 const voiceHint = ref('')
 const recentTip = ref('')
 const showConfirm = ref(false)
-const pending = ref({
-  type: 'expense',
-  amount: 0,
-  categoryName: '',
-  note: '',
-  categoryId: '',
-  rawText: '',
-  source: 'text'
-})
+const pendingList = ref([])
+const voiceStarting = ref(false)
 
 const now = new Date()
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
@@ -125,8 +116,8 @@ const greeting = computed(() => {
   return '晚上好'
 })
 
-function openConfirm(record) {
-  pending.value = { ...record }
+function openConfirm(records) {
+  pendingList.value = records.map((r) => ({ ...r }))
   showConfirm.value = true
 }
 
@@ -134,24 +125,29 @@ function closeConfirm() {
   showConfirm.value = false
 }
 
+function removePending(idx) {
+  pendingList.value.splice(idx, 1)
+  if (!pendingList.value.length) showConfirm.value = false
+}
+
 async function handleParse(text, source) {
   uni.showLoading({ title: '识别中', mask: true })
   let result = null
   try {
-    result = await aiParse(text)
+    result = normalizeParseResult(await aiParse(text), source)
   } catch (e) {
     result = null
   }
   uni.hideLoading()
 
   if (!result || !result.ok) {
-    result = parseBookkeepingText(text)
+    result = parseBookkeepingText(text, source)
   }
   if (!result.ok) {
     uni.showToast({ title: result.error || '识别失败', icon: 'none', duration: 2500 })
     return
   }
-  openConfirm({ ...result.record, source })
+  openConfirm(result.records)
 }
 
 function onSendText() {
@@ -164,27 +160,35 @@ function onSendText() {
 }
 
 function confirmSave() {
-  const bill = addBill(pending.value)
+  if (!pendingList.value.length) return
+  const saved = pendingList.value.map((item) => addBill(item))
   showConfirm.value = false
   inputText.value = ''
   voiceHint.value = ''
-  const sign = bill.type === 'income' ? '+' : '-'
-  recentTip.value = `已记账：${bill.categoryName} ${sign}¥${bill.amount}`
-  uni.showToast({ title: '记账成功', icon: 'success' })
+  recentTip.value = `已记账 ${saved.length} 笔，合计可在账单页查看`
+  uni.showToast({ title: `已保存 ${saved.length} 笔`, icon: 'success' })
 }
 
-function onVoiceStart() {
+async function onVoiceStart() {
   voiceHint.value = ''
   isRecording.value = true
+  voiceStarting.value = true
 
-  const ok = startVoiceRecognize({
-    onError: () => {
-      // 插件不可用时，松手再提示
+  const ok = await startVoiceRecognize({
+    onStart: () => {
+      voiceStarting.value = false
+    },
+    onError: (err) => {
+      voiceStarting.value = false
+      if (err && err.message === 'RECORD_DENIED') {
+        voiceHint.value = '未获得麦克风权限'
+      }
     }
   })
 
+  voiceStarting.value = false
   if (!ok) {
-    // 无语音插件时仍展示按压态，松手提示改用文字
+    // 仍保持按压态，松手时提示
   }
 }
 
@@ -193,8 +197,8 @@ function onVoiceEnd() {
   isRecording.value = false
 
   if (!isVoiceAvailable()) {
-    voiceHint.value = '当前未配置语音识别插件，请直接输入文字记账'
-    uni.showToast({ title: '请使用文字输入', icon: 'none' })
+    voiceHint.value = '请先在微信公众平台添加「同声传译」插件，或改用文字输入'
+    uni.showToast({ title: '语音插件未就绪', icon: 'none' })
     return
   }
 
@@ -351,6 +355,9 @@ function onVoiceEnd() {
   background: #fff;
   border-radius: 24rpx 24rpx 0 0;
   padding: 40rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .sheet-title {
@@ -358,38 +365,62 @@ function onVoiceEnd() {
   font-size: 34rpx;
   font-weight: 600;
   color: #1a1a1a;
-  margin-bottom: 28rpx;
+  margin-bottom: 20rpx;
 }
 
-.row {
+.sheet-list {
+  max-height: 46vh;
+}
+
+.item {
   display: flex;
   justify-content: space-between;
-  padding: 18rpx 0;
+  align-items: center;
+  padding: 22rpx 0;
   border-bottom: 1rpx solid #f0f0f0;
 }
 
-.label {
-  font-size: 28rpx;
+.item-cat {
+  display: block;
+  font-size: 30rpx;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.item-note {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
   color: #8a8a8a;
 }
 
-.value {
-  font-size: 28rpx;
-  color: #1a1a1a;
-  max-width: 70%;
-  text-align: right;
+.item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8rpx;
 }
 
-.amount.expense {
+.item-amount {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.item-amount.expense {
   color: #fa5151;
 }
 
-.amount.income {
+.item-amount.income {
   color: #1aad19;
 }
 
+.item-del {
+  font-size: 22rpx;
+  color: #b2b2b2;
+}
+
 .sheet-actions {
-  margin-top: 36rpx;
+  margin-top: 28rpx;
   display: flex;
   gap: 24rpx;
 }
@@ -412,5 +443,9 @@ function onVoiceEnd() {
 .btn.primary {
   background: #1aad19;
   color: #fff;
+}
+
+.btn.disabled {
+  opacity: 0.5;
 }
 </style>

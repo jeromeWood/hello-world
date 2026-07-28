@@ -26,9 +26,29 @@ function findCategory(text, type) {
   return list[list.length - 1]
 }
 
-function localParse(raw) {
-  const text = String(raw || '').trim().replace(/\s+/g, '')
-  if (!text) return { ok: false, error: '请输入记账内容' }
+function splitSegments(raw) {
+  const text = String(raw || '').trim()
+  if (!text) return []
+  const rough = text
+    .split(/[\n\r,，;；、]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const result = []
+  for (const part of rough) {
+    const compact = part.replace(/\s+/g, '')
+    const re = /([^0-9]*?)(\d+(?:\.\d{1,2})?)(?:元|块钱|块|圆)?/g
+    const chunks = []
+    let m
+    while ((m = re.exec(compact)) !== null) chunks.push(m[0])
+    if (chunks.length <= 1) result.push(compact)
+    else result.push(...chunks)
+  }
+  return result.filter(Boolean)
+}
+
+function parseOne(seg) {
+  const text = String(seg || '').trim().replace(/\s+/g, '')
+  if (!text) return null
 
   const patterns = [
     /(?:花了|花费|支出|付了|支付|消费|收到|收入|赚了|到账)(\d+(?:\.\d{1,2})?)/,
@@ -43,9 +63,7 @@ function localParse(raw) {
       break
     }
   }
-  if (!amount || amount <= 0) {
-    return { ok: false, error: '没有识别到金额' }
-  }
+  if (!amount || amount <= 0) return null
 
   const incomeHints = ['收到', '收入', '工资', '奖金', '到账', '赚了', '收款']
   const type = incomeHints.some((k) => text.includes(k)) ? 'income' : 'expense'
@@ -53,21 +71,62 @@ function localParse(raw) {
   let note = text
     .replace(String(amount), '')
     .replace(/元|块钱|块|圆/g, '')
-    .replace(/花了|花费|支出|付了|支付|消费|收到|收入|赚了|到账/g, '')
+    .replace(/花了|花费|支出|付了|支付|消费|收到|收入|赚了|到账|我买|买了|买/g, '')
     .trim() || '未备注'
 
   return {
+    type,
+    amount,
+    categoryId: category.id,
+    categoryName: category.name,
+    note: note.slice(0, 40),
+    rawText: text,
+    source: 'ai'
+  }
+}
+
+function localParse(raw) {
+  const segments = splitSegments(raw)
+  const records = segments.map(parseOne).filter(Boolean)
+  if (!records.length) {
+    return { ok: false, error: '没有识别到金额' }
+  }
+  return {
     ok: true,
     engine: 'local-rules',
-    record: {
-      type,
-      amount,
-      categoryId: category.id,
-      categoryName: category.name,
-      note: note.slice(0, 40),
-      rawText: String(raw || '').trim(),
-      source: 'ai'
-    }
+    records,
+    record: records[0]
+  }
+}
+
+function mapAiRecords(ai, fallbackText) {
+  let list = []
+  if (Array.isArray(ai?.records) && ai.records.length) list = ai.records
+  else if (ai?.record) list = [ai.record]
+
+  const records = list
+    .filter((r) => r && Number(r.amount) > 0)
+    .map((r) => {
+      const type = r.type === 'income' ? 'income' : 'expense'
+      const name = r.categoryName || (type === 'income' ? '其他收入' : '其他支出')
+      const cat = findCategory(String(name) + String(r.note || '') + fallbackText, type)
+      return {
+        type,
+        amount: Math.round(Number(r.amount) * 100) / 100,
+        categoryId: cat.id,
+        categoryName: cat.name || name,
+        note: String(r.note || '未备注').slice(0, 40),
+        rawText: r.rawText || fallbackText,
+        source: 'ai'
+      }
+    })
+
+  if (!records.length) return null
+  return {
+    ok: true,
+    engine: 'remote-ai',
+    records,
+    record: records[0]
   }
 }
 
@@ -196,27 +255,11 @@ async function chatJson(system, user) {
 export async function parseExpenseText(text) {
   try {
     const ai = await chatJson(
-      '你是记账助手。从用户中文句子提取记账信息，只返回 JSON：{"ok":true,"record":{"type":"expense|income","amount":number,"categoryName":"分类","note":"备注","rawText":"原文"}}。分类优先：餐饮/交通/购物/居住/娱乐/医疗/教育/社交/工资/奖金/兼职/理财/其他。',
+      '你是记账助手。用户可能一次说多笔账。提取所有记账，只返回 JSON：{"ok":true,"records":[{"type":"expense|income","amount":number,"categoryName":"分类","note":"备注","rawText":"该条原文"}]}。分类优先：餐饮/交通/购物/居住/娱乐/医疗/教育/社交/工资/奖金/兼职/理财/其他。',
       text
     )
-    if (ai?.ok && ai.record?.amount) {
-      const type = ai.record.type === 'income' ? 'income' : 'expense'
-      const name = ai.record.categoryName || (type === 'income' ? '其他收入' : '其他支出')
-      const cat = findCategory(name + text, type)
-      return {
-        ok: true,
-        engine: 'remote-ai',
-        record: {
-          type,
-          amount: Number(ai.record.amount),
-          categoryId: cat.id,
-          categoryName: cat.name || name,
-          note: String(ai.record.note || '未备注').slice(0, 40),
-          rawText: text,
-          source: 'ai'
-        }
-      }
-    }
+    const mapped = mapAiRecords(ai, text)
+    if (mapped) return mapped
   } catch (e) {
     console.warn('AI parse fallback:', e.message)
   }
