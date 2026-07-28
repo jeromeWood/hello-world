@@ -28,7 +28,7 @@
         <textarea
           v-model="inputText"
           class="input"
-          placeholder="例如：我买咖啡10块，停车4块&#10;吃饭20"
+          placeholder="例如：咖啡10块，停车4块，吃饭20"
           placeholder-class="placeholder"
           :maxlength="500"
           :auto-height="true"
