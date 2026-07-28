@@ -1,6 +1,6 @@
 /**
  * 语音识别：微信同声传译插件 WechatSI
- * 需在微信公众平台添加插件，并在 manifest 声明。
+ * 需在微信公众平台添加插件，并在 manifest 声明（见 docs/voice-plugin.md）。
  */
 
 let recordManager = null
@@ -30,27 +30,37 @@ export function isVoiceAvailable() {
   return tryInitPlugin()
 }
 
+/**
+ * 申请录音权限。
+ * 注意：开发者工具模拟器经常不弹系统授权框，真机才会出现。
+ */
 export function ensureRecordPermission() {
   return new Promise((resolve) => {
     uni.getSetting({
       success: (setting) => {
-        if (setting.authSetting && setting.authSetting['scope.record']) {
+        const authed = !!(setting.authSetting && setting.authSetting['scope.record'])
+        if (authed) {
           resolve(true)
           return
         }
+
+        // 尚未授权：发起授权（模拟器可能静默成功/失败且无弹窗）
         uni.authorize({
           scope: 'scope.record',
           success: () => resolve(true),
           fail: () => {
+            // 模拟器或用户拒绝时，给出可操作提示
             uni.showModal({
               title: '需要麦克风权限',
-              content: '语音记账需要使用麦克风，请在设置中开启',
+              content:
+                '语音记账需要麦克风。若在模拟器中未出现授权框，请用「真机调试/预览」；也可到右上角详情查看权限。',
               confirmText: '去设置',
+              cancelText: '知道了',
               success: (res) => {
                 if (res.confirm) uni.openSetting({})
-              }
+              },
+              complete: () => resolve(false)
             })
-            resolve(false)
           }
         })
       },
@@ -60,14 +70,15 @@ export function ensureRecordPermission() {
 }
 
 export async function startVoiceRecognize({ onStart, onError } = {}) {
-  if (!isVoiceAvailable()) {
-    onError && onError(new Error('VOICE_UNAVAILABLE'))
-    return false
-  }
-
+  // 先申请麦克风，再判断插件（便于用户感知权限流程）
   const allowed = await ensureRecordPermission()
   if (!allowed) {
     onError && onError(new Error('RECORD_DENIED'))
+    return false
+  }
+
+  if (!isVoiceAvailable()) {
+    onError && onError(new Error('VOICE_UNAVAILABLE'))
     return false
   }
 

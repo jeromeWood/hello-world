@@ -181,14 +181,16 @@ async function onVoiceStart() {
     onError: (err) => {
       voiceStarting.value = false
       if (err && err.message === 'RECORD_DENIED') {
-        voiceHint.value = '未获得麦克风权限'
+        voiceHint.value = '未获得麦克风权限（模拟器可能不弹窗，请用真机）'
+      } else if (err && err.message === 'VOICE_UNAVAILABLE') {
+        voiceHint.value = '语音插件未启用，请先按文档添加同声传译'
       }
     }
   })
 
   voiceStarting.value = false
-  if (!ok) {
-    // 仍保持按压态，松手时提示
+  if (!ok && !voiceHint.value) {
+    voiceHint.value = '语音未就绪，可先用文字记账'
   }
 }
 
@@ -197,8 +199,10 @@ function onVoiceEnd() {
   isRecording.value = false
 
   if (!isVoiceAvailable()) {
-    voiceHint.value = '请先在微信公众平台添加「同声传译」插件，或改用文字输入'
-    uni.showToast({ title: '语音插件未就绪', icon: 'none' })
+    if (!voiceHint.value) {
+      voiceHint.value = '语音插件未启用，请改用文字输入'
+    }
+    uni.showToast({ title: '请先用文字记账', icon: 'none' })
     return
   }
 
