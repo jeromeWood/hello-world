@@ -88,6 +88,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { aiParse } from '../../utils/api.js'
 import { parseBookkeepingText } from '../../utils/parser.js'
 import { addBill } from '../../utils/storage.js'
 import { isVoiceAvailable, startVoiceRecognize, stopVoiceRecognize } from '../../utils/voice.js'
@@ -133,10 +134,21 @@ function closeConfirm() {
   showConfirm.value = false
 }
 
-function handleParse(text, source) {
-  const result = parseBookkeepingText(text)
+async function handleParse(text, source) {
+  uni.showLoading({ title: '识别中', mask: true })
+  let result = null
+  try {
+    result = await aiParse(text)
+  } catch (e) {
+    result = null
+  }
+  uni.hideLoading()
+
+  if (!result || !result.ok) {
+    result = parseBookkeepingText(text)
+  }
   if (!result.ok) {
-    uni.showToast({ title: result.error, icon: 'none', duration: 2500 })
+    uni.showToast({ title: result.error || '识别失败', icon: 'none', duration: 2500 })
     return
   }
   openConfirm({ ...result.record, source })

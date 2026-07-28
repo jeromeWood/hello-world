@@ -95,6 +95,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import { aiAdvice } from '../../utils/api.js'
 import { currentMonth } from '../../utils/storage.js'
 import { getMonthBudget, upsertBudget } from '../../utils/budget.js'
 import { buildAdvice, getMonthStats, getRecentMonthsTrend } from '../../utils/stats.js'
@@ -140,11 +141,25 @@ function trendHeight(amount) {
   return `${Math.max(8, h)}rpx`
 }
 
-function reload() {
+async function reload() {
   stats.value = getMonthStats(month.value)
   trend.value = getRecentMonthsTrend(6)
   budget.value = getMonthBudget(month.value, '')
   advice.value = buildAdvice(month.value)
+
+  try {
+    const remote = await aiAdvice({
+      month: month.value,
+      summary: stats.value.summary,
+      budgetAmount: budget.value?.amount || 0,
+      maxCategory: stats.value.maxCategory
+    })
+    if (remote?.ok && Array.isArray(remote.tips) && remote.tips.length) {
+      advice.value = remote.tips
+    }
+  } catch (e) {
+    // 后端不可用时保留本地规则建议
+  }
 }
 
 function pickMonth() {

@@ -13,22 +13,34 @@
 
 ## 本地运行
 
+### 1) 小程序前端
+
 ```bash
 cd uni-app
 npm install
 npm run dev:mp-weixin
 ```
 
-用微信开发者工具导入目录（必须是编译产物）：
+用微信开发者工具导入：
 
 ```text
 uni-app/dist/dev/mp-weixin
 ```
 
-不要导入 `uni-app` 或 `uni-app/src`。
+### 2) 后端（AI / 解析服务）
 
-## 下一步（规划）
+```bash
+cd server
+cp .env.example .env
+npm install
+npm run dev
+```
 
-- 接入语音识别与 AI 记账解析
-- 账单、预算、统计分析
-- 后端 API 与数据持久化
+默认 `http://127.0.0.1:3000`。可在小程序「我的」页检测连接。
+
+## 已完成能力
+
+1. 文字/语音记账解析（本地规则 + 可选远程 AI）
+2. 账单列表与本地存储
+3. 统计、预算与消费建议
+4. Express 后端与 AI 接口
