@@ -1,5 +1,5 @@
 <template>
-  <view class="splash" @click="enterHome">
+  <view class="splash" @click="enterNext">
     <image class="bg" src="/static/splash/ad.jpg" mode="aspectFill" />
     <view class="overlay">
       <text class="brand">智记</text>
@@ -14,31 +14,34 @@
 <script setup>
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { ref } from 'vue'
+import { isLoggedIn } from '../../utils/user.js'
 
 const countdown = ref(2)
 let timer = null
 let entered = false
 
-function enterHome() {
+function enterNext() {
   if (entered) return
   entered = true
   if (timer) {
     clearInterval(timer)
     timer = null
   }
-  uni.switchTab({
-    url: '/pages/index/index',
-    fail: () => {
-      uni.reLaunch({ url: '/pages/index/index' })
-    }
-  })
+  if (isLoggedIn()) {
+    uni.switchTab({
+      url: '/pages/index/index',
+      fail: () => uni.reLaunch({ url: '/pages/index/index' })
+    })
+  } else {
+    uni.reLaunch({ url: '/pages/login/login' })
+  }
 }
 
 onLoad(() => {
   timer = setInterval(() => {
     if (countdown.value <= 1) {
       countdown.value = 0
-      enterHome()
+      enterNext()
       return
     }
     countdown.value -= 1
