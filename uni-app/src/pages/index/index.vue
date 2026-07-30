@@ -1,84 +1,60 @@
 <template>
   <view class="page">
-    <view class="header">
-      <text class="date">{{ dateLabel }}</text>
-      <text class="title">{{ greeting }}，开始记账吧</text>
-      <text class="subtitle">支持一次输入多笔，例如：咖啡10块，停车4块，吃饭20</text>
-    </view>
-
-    <view class="main">
-      <view
-        class="voice-btn"
-        :class="{ active: isRecording }"
-        @touchstart.prevent="onVoiceStart"
-        @touchend.prevent="onVoiceEnd"
-        @touchcancel.prevent="onVoiceEnd"
-      >
-        <text class="voice-text">{{ isRecording ? '松开发送' : '按住 说话' }}</text>
-      </view>
-
-      <view v-if="isRecording" class="listening">
-        <text class="listening-text">正在聆听…</text>
-      </view>
-      <view v-else-if="voiceHint" class="listening">
-        <text class="hint-text">{{ voiceHint }}</text>
-      </view>
-
-      <view class="input-wrap">
-        <textarea
-          v-model="inputText"
-          class="input"
-          placeholder="例如：咖啡10块，停车4块，吃饭20"
-          placeholder-class="placeholder"
-          :maxlength="500"
-          :auto-height="true"
-          :show-confirm-bar="false"
-        />
-      </view>
-
-      <view class="send-row">
-        <view
-          class="send-btn"
-          :class="{ ready: !!inputText.trim() }"
-          @click="onSendText"
-        >
-          <text class="send-text">发送</text>
-        </view>
-      </view>
-
-      <view v-if="recentTip" class="recent-tip">
-        <text class="recent-text">{{ recentTip }}</text>
+    <!-- 快捷入口 -->
+    <view class="quick">
+      <view v-for="q in quicks" :key="q.text" class="quick-item" @click="q.go">
+        <view class="quick-icon">{{ q.icon }}</view>
+        <text class="quick-text">{{ q.text }}</text>
       </view>
     </view>
 
-    <!-- 多条确认弹层 -->
-    <view v-if="showConfirm" class="mask" @click="closeConfirm">
-      <view class="sheet" @click.stop>
-        <text class="sheet-title">确认记账（{{ pendingList.length }} 笔）</text>
+    <!-- 促销条（可关） -->
+    <view v-if="showBanner" class="banner">
+      <text class="banner-text">暑期特惠：AI 记账更省心</text>
+      <text class="banner-link" @click="showBanner = false">知道了</text>
+    </view>
 
-        <scroll-view scroll-y class="sheet-list">
-          <view v-for="(item, idx) in pendingList" :key="idx" class="item">
-            <view class="item-main">
-              <text class="item-cat">{{ item.categoryName }}</text>
-              <text class="item-note">{{ item.note }}</text>
-            </view>
-            <view class="item-right">
-              <text class="item-amount" :class="item.type">
-                {{ item.type === 'income' ? '+' : '-' }}¥{{ item.amount }}
-              </text>
-              <text class="item-del" @click="removePending(idx)">删除</text>
-            </view>
-          </view>
-        </scroll-view>
+    <!-- 本年收支 -->
+    <view class="card hero">
+      <view class="hero-head">
+        <text class="card-title">本年收支统计</text>
+        <text class="eye" @click="hideMoney = !hideMoney">{{ hideMoney ? '显示' : '隐藏' }}</text>
+      </view>
+      <text class="hero-label">总支出</text>
+      <text class="hero-expense">{{ hideMoney ? '****' : money(year.expense) }}</text>
+      <view class="hero-row">
+        <text>总收入 {{ hideMoney ? '****' : money(year.income) }}</text>
+        <text>结余 {{ hideMoney ? '****' : money(year.income - year.expense) }}</text>
+      </view>
+    </view>
 
-        <view class="sheet-actions">
-          <view class="btn ghost" @click="closeConfirm">
-            <text>取消</text>
-          </view>
-          <view class="btn primary" :class="{ disabled: !pendingList.length }" @click="confirmSave">
-            <text>全部保存</text>
+    <!-- 收支报告 -->
+    <view class="card">
+      <text class="card-title">收支报告</text>
+      <view v-for="row in reportRows" :key="row.key" class="report-row" @click="goFlow">
+        <view class="report-left">
+          <view class="dot" :class="row.key" />
+          <view>
+            <text class="report-name">{{ row.name }}</text>
+            <text class="report-sub">{{ row.label }}</text>
           </view>
         </view>
+        <view class="report-right">
+          <text class="income">总收入 {{ hideMoney ? '****' : money(row.income) }}</text>
+          <text class="expense">总支出 {{ hideMoney ? '****' : money(row.expense) }}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 本月支出 -->
+    <view class="card">
+      <text class="card-title">本月支出情况</text>
+      <view class="month-line">
+        <text class="expense">总支出 {{ hideMoney ? '****' : money(month.expense) }}</text>
+        <text class="muted">支出笔数 {{ month.count }}</text>
+      </view>
+      <view class="bar-bg">
+        <view class="bar-fill" :style="{ width: monthBar }" />
       </view>
     </view>
   </view>
@@ -86,370 +62,219 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { aiParse } from '../../utils/api.js'
-import { normalizeParseResult, parseBookkeepingText } from '../../utils/parser.js'
-import { addBill } from '../../utils/storage.js'
-import { isVoiceAvailable, startVoiceRecognize, stopVoiceRecognize } from '../../utils/voice.js'
+import { onShow } from '@dcloudio/uni-app'
+import { formatMoney, getRangeSummary } from '../../utils/storage.js'
 
-const isRecording = ref(false)
-const inputText = ref('')
-const voiceHint = ref('')
-const recentTip = ref('')
-const showConfirm = ref(false)
-const pendingList = ref([])
-const voiceStarting = ref(false)
-
-const now = new Date()
-const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-
-const dateLabel = computed(() => {
-  const m = now.getMonth() + 1
-  const d = now.getDate()
-  const w = weekdays[now.getDay()]
-  return `${m}月${d}日 星期${w}`
+const hideMoney = ref(false)
+const showBanner = ref(true)
+const tick = ref(0)
+const ranges = computed(() => {
+  tick.value
+  return getRangeSummary()
 })
 
-const greeting = computed(() => {
-  const hour = now.getHours()
-  if (hour < 12) return '早上好'
-  if (hour < 18) return '下午好'
-  return '晚上好'
+const year = computed(() => ranges.value.year)
+const month = computed(() => ranges.value.month)
+
+const reportRows = computed(() => [
+  { key: 'today', name: '今天', ...ranges.value.today },
+  { key: 'week', name: '本周', ...ranges.value.week },
+  { key: 'month', name: '本月', ...ranges.value.month }
+])
+
+const monthBar = computed(() => {
+  const max = Math.max(year.value.expense, 1)
+  return `${Math.min(100, Math.round((month.value.expense / max) * 100))}%`
 })
 
-function openConfirm(records) {
-  pendingList.value = records.map((r) => ({ ...r }))
-  showConfirm.value = true
+const quicks = [
+  { icon: '账', text: '账户', go: () => uni.showToast({ title: '账户功能稍后完善', icon: 'none' }) },
+  { icon: '预', text: '预算', go: () => uni.switchTab({ url: '/pages/stats/stats' }) },
+  { icon: '图', text: '图表', go: () => uni.switchTab({ url: '/pages/stats/stats' }) },
+  { icon: '记', text: '记一笔', go: () => uni.switchTab({ url: '/pages/record/record' }) },
+  { icon: '设', text: '设置', go: () => uni.switchTab({ url: '/pages/mine/mine' }) }
+]
+
+function money(n) {
+  return formatMoney(n)
 }
 
-function closeConfirm() {
-  showConfirm.value = false
+function goFlow() {
+  uni.switchTab({ url: '/pages/flow/flow' })
 }
 
-function removePending(idx) {
-  pendingList.value.splice(idx, 1)
-  if (!pendingList.value.length) showConfirm.value = false
-}
-
-async function handleParse(text, source) {
-  uni.showLoading({ title: '识别中', mask: true })
-  let result = null
-  try {
-    result = normalizeParseResult(await aiParse(text), source)
-  } catch (e) {
-    result = null
-  }
-  uni.hideLoading()
-
-  if (!result || !result.ok) {
-    result = parseBookkeepingText(text, source)
-  }
-  if (!result.ok) {
-    uni.showToast({ title: result.error || '识别失败', icon: 'none', duration: 2500 })
-    return
-  }
-  openConfirm(result.records)
-}
-
-function onSendText() {
-  const text = inputText.value.trim()
-  if (!text) {
-    uni.showToast({ title: '请先输入内容', icon: 'none' })
-    return
-  }
-  handleParse(text, 'text')
-}
-
-function confirmSave() {
-  if (!pendingList.value.length) return
-  const saved = pendingList.value.map((item) => addBill(item))
-  showConfirm.value = false
-  inputText.value = ''
-  voiceHint.value = ''
-  recentTip.value = `已记账 ${saved.length} 笔，合计可在账单页查看`
-  uni.showToast({ title: `已保存 ${saved.length} 笔`, icon: 'success' })
-}
-
-async function onVoiceStart() {
-  voiceHint.value = ''
-  isRecording.value = true
-  voiceStarting.value = true
-
-  const ok = await startVoiceRecognize({
-    onStart: () => {
-      voiceStarting.value = false
-    },
-    onError: (err) => {
-      voiceStarting.value = false
-      if (err && err.message === 'RECORD_DENIED') {
-        voiceHint.value = '未获得麦克风权限（模拟器可能不弹窗，请用真机）'
-      } else if (err && err.message === 'VOICE_UNAVAILABLE') {
-        voiceHint.value = '语音插件未启用，请先按文档添加同声传译'
-      }
-    }
-  })
-
-  voiceStarting.value = false
-  if (!ok && !voiceHint.value) {
-    voiceHint.value = '语音未就绪，可先用文字记账'
-  }
-}
-
-function onVoiceEnd() {
-  if (!isRecording.value) return
-  isRecording.value = false
-
-  if (!isVoiceAvailable()) {
-    if (!voiceHint.value) {
-      voiceHint.value = '语音插件未启用，请改用文字输入'
-    }
-    uni.showToast({ title: '请先用文字记账', icon: 'none' })
-    return
-  }
-
-  stopVoiceRecognize({
-    onResult: (text) => {
-      if (!text) {
-        uni.showToast({ title: '没听清，请再说一次或改用文字', icon: 'none' })
-        return
-      }
-      inputText.value = text
-      handleParse(text, 'voice')
-    },
-    onError: () => {
-      voiceHint.value = '语音识别失败，请改用文字输入'
-      uni.showToast({ title: '识别失败', icon: 'none' })
-    }
-  })
-}
+onShow(() => {
+  tick.value += 1
+})
 </script>
 
 <style lang="scss" scoped>
 .page {
   min-height: 100vh;
-  padding: 24rpx 40rpx 40rpx;
   background: #f7f8fa;
+  padding: 20rpx 24rpx 40rpx;
 }
-
-.header {
-  padding-top: 12rpx;
-  padding-bottom: 24rpx;
+.quick {
+  display: flex;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx 8rpx;
 }
-
-.date {
-  display: block;
-  font-size: 26rpx;
-  color: #b2b2b2;
+.quick-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-
-.title {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 44rpx;
-  font-weight: 600;
-  color: #1a1a1a;
-  line-height: 1.3;
-}
-
-.subtitle {
-  display: block;
-  margin-top: 16rpx;
-  font-size: 28rpx;
-  color: #576b95;
-  line-height: 1.5;
-}
-
-.main {
-  margin-top: 80rpx;
-}
-
-.voice-btn {
-  height: 96rpx;
-  border-radius: 12rpx;
-  background: #f7f7f7;
-  border: 1rpx solid #e5e5e5;
+.quick-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #eef9f4;
+  color: #1aad19;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 28rpx;
+  font-weight: 600;
 }
-
-.voice-btn.active {
-  background: #c6c6c6;
-  border-color: #b5b5b5;
-}
-
-.voice-text {
-  font-size: 32rpx;
+.quick-text {
+  margin-top: 10rpx;
+  font-size: 22rpx;
   color: #353535;
 }
-
-.listening,
-.recent-tip {
-  margin-top: 20rpx;
-  display: flex;
-  justify-content: center;
-}
-
-.listening-text {
-  font-size: 24rpx;
-  color: #179b16;
-}
-
-.hint-text,
-.recent-text {
-  font-size: 24rpx;
-  color: #8a8a8a;
-  text-align: center;
-}
-
-.input-wrap {
-  margin-top: 48rpx;
-  background: #ffffff;
-  border: 1rpx solid #e5e5e5;
+.banner {
+  margin-top: 16rpx;
+  background: #fff7e8;
   border-radius: 12rpx;
-  padding: 24rpx;
-}
-
-.input {
-  width: 100%;
-  min-height: 160rpx;
-  font-size: 30rpx;
-  color: #1a1a1a;
-  line-height: 1.5;
-}
-
-.placeholder {
-  color: #b2b2b2;
-}
-
-.send-row {
-  margin-top: 24rpx;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.send-btn {
-  padding: 16rpx 48rpx;
-  border-radius: 12rpx;
-  background: #b2b2b2;
-}
-
-.send-btn.ready {
-  background: #1aad19;
-}
-
-.send-text {
-  font-size: 28rpx;
-  color: #ffffff;
-}
-
-.mask {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-}
-
-.sheet {
-  width: 100%;
-  background: #fff;
-  border-radius: 24rpx 24rpx 0 0;
-  padding: 40rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
-  max-height: 75vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.sheet-title {
-  display: block;
-  font-size: 34rpx;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 20rpx;
-}
-
-.sheet-list {
-  max-height: 46vh;
-}
-
-.item {
+  padding: 18rpx 24rpx;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 22rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
 }
-
-.item-cat {
+.banner-text {
+  font-size: 24rpx;
+  color: #8a5a00;
+}
+.banner-link {
+  font-size: 24rpx;
+  color: #1aad19;
+}
+.card {
+  margin-top: 16rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx;
+}
+.card-title {
   display: block;
   font-size: 30rpx;
+  font-weight: 600;
   color: #1a1a1a;
-  font-weight: 500;
+  margin-bottom: 16rpx;
 }
-
-.item-note {
+.hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.eye {
+  font-size: 24rpx;
+  color: #1aad19;
+}
+.hero-label {
   display: block;
-  margin-top: 6rpx;
+  margin-top: 8rpx;
   font-size: 24rpx;
   color: #8a8a8a;
 }
-
-.item-right {
+.hero-expense {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 52rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.hero-row {
+  margin-top: 16rpx;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8rpx;
+  justify-content: space-between;
+  font-size: 26rpx;
+  color: #576b95;
 }
-
-.item-amount {
-  font-size: 30rpx;
-  font-weight: 600;
+.report-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
 }
-
-.item-amount.expense {
-  color: #fa5151;
+.report-row:last-child {
+  border-bottom: none;
 }
-
-.item-amount.income {
-  color: #1aad19;
+.report-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
 }
-
-.item-del {
+.dot {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 14rpx;
+  background: #eef9f4;
+}
+.dot.today {
+  background: #e8f5e9;
+}
+.dot.week {
+  background: #e3f2fd;
+}
+.dot.month {
+  background: #fff3e0;
+}
+.report-name {
+  display: block;
+  font-size: 28rpx;
+  color: #1a1a1a;
+}
+.report-sub {
+  display: block;
+  margin-top: 4rpx;
   font-size: 22rpx;
   color: #b2b2b2;
 }
-
-.sheet-actions {
-  margin-top: 28rpx;
+.report-right {
+  text-align: right;
+}
+.income {
+  display: block;
+  font-size: 24rpx;
+  color: #fa5151;
+}
+.expense {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: #4a90e2;
+}
+.month-line {
   display: flex;
-  gap: 24rpx;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
 }
-
-.btn {
-  flex: 1;
-  height: 88rpx;
-  border-radius: 12rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30rpx;
+.muted {
+  font-size: 24rpx;
+  color: #8a8a8a;
 }
-
-.btn.ghost {
-  background: #f5f5f5;
-  color: #353535;
+.bar-bg {
+  height: 16rpx;
+  background: #f0f0f0;
+  border-radius: 999rpx;
+  overflow: hidden;
 }
-
-.btn.primary {
+.bar-fill {
+  height: 100%;
   background: #1aad19;
-  color: #fff;
-}
-
-.btn.disabled {
-  opacity: 0.5;
+  border-radius: 999rpx;
 }
 </style>

@@ -1,43 +1,61 @@
 <template>
   <view class="page">
-    <view class="card">
-      <text class="title">我的</text>
-      <text class="desc">账户与服务设置</text>
+    <!-- 功能卡片 -->
+    <view class="grid">
+      <view class="grid-card" @click="toast('封账功能稍后完善')">
+        <text class="grid-title">封账</text>
+        <text class="grid-desc">封存部分流水防止修改</text>
+      </view>
+      <view class="grid-card" @click="exportData">
+        <text class="grid-title">数据导出</text>
+        <text class="grid-desc">一键导出流水数据</text>
+      </view>
+      <view class="grid-card" @click="toast('导入功能稍后完善')">
+        <text class="grid-title">数据导入</text>
+        <text class="grid-desc">支持导入微信等账单</text>
+        <text class="badge">敬请期待</text>
+      </view>
+      <view class="grid-card" @click="goRecord">
+        <text class="grid-title">AI 记账</text>
+        <text class="grid-desc">语音/文字智能识别</text>
+      </view>
     </view>
 
+    <text class="section">基础功能</text>
+    <view class="list">
+      <view class="row" @click="goStats">
+        <text>预算中心</text>
+        <text class="arrow">></text>
+      </view>
+      <view class="row" @click="goStats">
+        <text>图表分析</text>
+        <text class="arrow">></text>
+      </view>
+      <view class="row" @click="goFlow">
+        <text>全部流水</text>
+        <text class="arrow">></text>
+      </view>
+      <view class="row" @click="clearAll">
+        <text>清空本地账单</text>
+        <text class="arrow">></text>
+      </view>
+    </view>
+
+    <text class="section">后端服务</text>
     <view class="card">
-      <text class="section">后端服务</text>
       <text class="label">API 地址</text>
-      <input
-        class="input"
-        v-model="apiBase"
-        placeholder="http://127.0.0.1:3000"
-      />
+      <input v-model="apiBase" class="input" placeholder="http://127.0.0.1:3000" />
       <view class="actions">
-        <view class="btn ghost" @click="saveBase">
-          <text>保存地址</text>
-        </view>
-        <view class="btn primary" @click="ping">
-          <text>检测连接</text>
-        </view>
+        <view class="btn ghost" @click="saveBase">保存</view>
+        <view class="btn primary" @click="ping">检测连接</view>
       </view>
       <text class="status">{{ statusText }}</text>
     </view>
 
     <view class="card">
-      <text class="section">语音识别</text>
-      <text class="line">已启用微信同声传译插件（WechatSI）。</text>
-      <text class="line">首页长按「按住 说话」即可语音记账。</text>
-      <text class="line">首次使用请允许麦克风权限；模拟器可能不弹窗，建议真机预览。</text>
-      <text class="line">若白屏，请确认公众平台插件版本与 manifest 中 version 一致。</text>
-    </view>
-
-    <view class="card">
-      <text class="section">说明</text>
-      <text class="line">1. 本机先启动 server：`cd server && npm install && npm run dev`</text>
-      <text class="line">2. 微信开发者工具需关闭域名校验（详情 → 本地设置）</text>
-      <text class="line">3. 未配置 AI_API_KEY 时，后端使用本地规则引擎</text>
-      <text class="line">4. 支持一次输入多笔：咖啡10块，停车4块，吃饭20</text>
+      <text class="section-inline">语音识别</text>
+      <text class="line">已配置同声传译插件。真机可长按说话记账。</text>
+      <text class="line">请在隐私指引中声明「访问你的麦克风」。</text>
     </view>
   </view>
 </template>
@@ -46,9 +64,23 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getApiBase, healthCheck, setApiBase } from '../../utils/api.js'
+import { clearBills, listBills } from '../../utils/storage.js'
 
 const apiBase = ref(getApiBase())
 const statusText = ref('尚未检测')
+
+function toast(title) {
+  uni.showToast({ title, icon: 'none' })
+}
+function goRecord() {
+  uni.switchTab({ url: '/pages/record/record' })
+}
+function goStats() {
+  uni.switchTab({ url: '/pages/stats/stats' })
+}
+function goFlow() {
+  uni.switchTab({ url: '/pages/flow/flow' })
+}
 
 function saveBase() {
   setApiBase(apiBase.value.trim() || 'http://127.0.0.1:3000')
@@ -69,6 +101,36 @@ async function ping() {
   }
 }
 
+function exportData() {
+  const bills = listBills()
+  if (!bills.length) {
+    uni.showToast({ title: '暂无数据可导出', icon: 'none' })
+    return
+  }
+  const text = bills
+    .map(
+      (b) =>
+        `${b.date} ${b.time || ''} ${b.type} ${b.categoryName} ${b.amount} ${b.note || ''}`
+    )
+    .join('\n')
+  uni.setClipboardData({
+    data: text,
+    success: () => uni.showToast({ title: '已复制到剪贴板', icon: 'success' })
+  })
+}
+
+function clearAll() {
+  uni.showModal({
+    title: '清空账单',
+    content: '将删除本地全部流水，确定吗？',
+    success: (res) => {
+      if (!res.confirm) return
+      clearBills()
+      uni.showToast({ title: '已清空', icon: 'success' })
+    }
+  })
+}
+
 onShow(() => {
   apiBase.value = getApiBase()
 })
@@ -78,90 +140,125 @@ onShow(() => {
 .page {
   min-height: 100vh;
   background: #f7f8fa;
-  padding: 24rpx;
+  padding: 20rpx 24rpx 40rpx;
 }
-
-.card {
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+.grid-card {
+  width: calc(50% - 8rpx);
   background: #fff;
   border-radius: 16rpx;
-  padding: 28rpx;
-  margin-bottom: 20rpx;
+  padding: 28rpx 24rpx;
+  position: relative;
+  box-sizing: border-box;
 }
-
-.title {
-  display: block;
-  font-size: 40rpx;
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 26rpx;
-  color: #8a8a8a;
-}
-
-.section {
+.grid-title {
   display: block;
   font-size: 30rpx;
   font-weight: 600;
   color: #1a1a1a;
-  margin-bottom: 20rpx;
 }
-
+.grid-desc {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #8a8a8a;
+  line-height: 1.4;
+}
+.badge {
+  position: absolute;
+  top: 12rpx;
+  right: 12rpx;
+  background: #fa5151;
+  color: #fff;
+  font-size: 18rpx;
+  padding: 4rpx 10rpx;
+  border-radius: 999rpx;
+}
+.section {
+  display: block;
+  margin: 28rpx 8rpx 12rpx;
+  font-size: 26rpx;
+  color: #8a8a8a;
+}
+.list,
+.card {
+  background: #fff;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30rpx 28rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  font-size: 30rpx;
+  color: #1a1a1a;
+}
+.row:last-child {
+  border-bottom: none;
+}
+.arrow {
+  color: #c0c0c0;
+}
+.card {
+  padding: 28rpx;
+  margin-bottom: 16rpx;
+}
 .label {
   display: block;
   font-size: 26rpx;
   color: #8a8a8a;
   margin-bottom: 12rpx;
 }
-
 .input {
   background: #f7f8fa;
   border-radius: 12rpx;
-  padding: 20rpx 24rpx;
+  padding: 18rpx 20rpx;
   font-size: 28rpx;
 }
-
 .actions {
   display: flex;
   gap: 16rpx;
-  margin-top: 24rpx;
+  margin-top: 20rpx;
 }
-
 .btn {
   flex: 1;
-  height: 80rpx;
+  height: 76rpx;
   border-radius: 12rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28rpx;
 }
-
 .btn.ghost {
   background: #f5f5f5;
-  color: #353535;
 }
-
 .btn.primary {
   background: #1aad19;
   color: #fff;
 }
-
 .status {
   display: block;
-  margin-top: 20rpx;
+  margin-top: 16rpx;
   font-size: 24rpx;
   color: #576b95;
 }
-
+.section-inline {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
 .line {
   display: block;
   font-size: 26rpx;
   color: #353535;
   line-height: 1.6;
-  margin-bottom: 8rpx;
+  margin-bottom: 6rpx;
 }
 </style>
