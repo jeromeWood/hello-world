@@ -1,4 +1,4 @@
-const EXPENSE_CATEGORIES = [
+export const EXPENSE_CATEGORIES = [
   { id: 'food', name: '餐饮', keywords: ['午饭', '晚餐', '早饭', '早餐', '午餐', '晚饭', '吃饭', '外卖', '咖啡', '奶茶', '宵夜', '食堂'] },
   { id: 'transport', name: '交通', keywords: ['地铁', '公交', '打车', '滴滴', '加油', '停车', '高铁', '机票'] },
   { id: 'shopping', name: '购物', keywords: ['购物', '淘宝', '京东', '拼多多', '衣服', '鞋子'] },
@@ -10,13 +10,31 @@ const EXPENSE_CATEGORIES = [
   { id: 'other_expense', name: '其他支出', keywords: [] }
 ]
 
-const INCOME_CATEGORIES = [
+export const INCOME_CATEGORIES = [
   { id: 'salary', name: '工资', keywords: ['工资', '薪水', '发薪'] },
   { id: 'bonus', name: '奖金', keywords: ['奖金', '年终奖', '提成'] },
   { id: 'freelance', name: '兼职', keywords: ['兼职', '外快'] },
   { id: 'investment', name: '理财', keywords: ['理财', '利息', '分红'] },
   { id: 'other_income', name: '其他收入', keywords: ['收款', '退款'] }
 ]
+
+/** 供 MCP / 其他平台查询可用分类目录 */
+export function listCategories(type = 'all') {
+  const expense = EXPENSE_CATEGORIES.map(({ id, name, keywords }) => ({ id, name, keywords, type: 'expense' }))
+  const income = INCOME_CATEGORIES.map(({ id, name, keywords }) => ({ id, name, keywords, type: 'income' }))
+  if (type === 'expense') return { ok: true, type, categories: expense }
+  if (type === 'income') return { ok: true, type, categories: income }
+  return { ok: true, type: 'all', categories: [...expense, ...income] }
+}
+
+export function getHealthInfo() {
+  return {
+    ok: true,
+    service: 'doMoney',
+    ai: process.env.AI_API_KEY ? 'remote' : 'local-rules',
+    time: new Date().toISOString()
+  }
+}
 
 function findCategory(text, type) {
   const list = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
